@@ -48,6 +48,10 @@ select option{background:#241608}
 .ai-parse-btn:not(:disabled):active{background:linear-gradient(135deg,#d4a853,#f0c060)}
 .ai-confirm-btn{cursor:pointer;background:#2a5c2a;color:#90ee90;border:1px solid #3d8b3d;padding:12px;font-family:inherit;font-size:14px;font-weight:700;border-radius:2px;width:100%;letter-spacing:1px;transition:all .2s}
 .ai-confirm-btn:active{background:#357535}
+.voice-btn{cursor:pointer;background:#1f1005;border:2px solid #5a3e1b;color:#a07840;padding:0;font-family:inherit;font-size:28px;border-radius:50%;width:56px;height:56px;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+.voice-btn.recording{border-color:#e05555;background:#2a0808;color:#ff6666;animation:voicePulse 1s infinite}
+.voice-btn:active{opacity:.8}
+@keyframes voicePulse{0%,100%{box-shadow:0 0 0 0 #e0555544}50%{box-shadow:0 0 0 10px #e0555500}}
 .settings-btn{cursor:pointer;background:transparent;border:1px solid #3d2910;color:#6b4f28;padding:5px 10px;font-family:inherit;font-size:12px;border-radius:2px;transition:all .2s;margin-left:auto}
 .settings-btn:active{border-color:#5a3e1b;color:#a07840}
 </style>
@@ -130,6 +134,9 @@ function App(){
   const [aiParsing, setAiParsing] = useState(false);
   const [aiPreview, setAiPreview] = useState(null);
   const [aiError, setAiError] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
+  const recognitionRef = React.useRef(null);
   const [apiKey, setApiKey] = useState(()=>loadApiKey());
   const [showSettings, setShowSettings] = useState(false);
   const [apiKeyDraft, setApiKeyDraft] = useState("");
@@ -150,6 +157,34 @@ function App(){
     if(!editForm.amount||isNaN(editForm.amount)||Number(editForm.amount)<=0||!editForm.date) return;
     save(records.map(r=>r.id===editingId?{...r,date:editForm.date,amount:parseFloat(editForm.amount),category:editForm.category,note:editForm.note,payMethod:editForm.payMethod,customerName:editForm.customerName.trim()}:r));
     setEditingId(null);
+  };
+
+  const startVoice = ()=>{
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SR){ setVoiceError("你的浏览器不支持语音识别，请用 Chrome 或手机浏览器"); return; }
+    if(isRecording){
+      if(recognitionRef.current) recognitionRef.current.stop();
+      setIsRecording(false);
+      return;
+    }
+    setVoiceError("");
+    const rec = new SR();
+    rec.lang = "zh-CN";
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.onstart = ()=>setIsRecording(true);
+    rec.onresult = (e)=>{
+      const t = e.results[0][0].transcript;
+      setAiInput(prev => prev ? prev + t : t);
+      setAiPreview(null); setAiError("");
+    };
+    rec.onerror = (e)=>{
+      setVoiceError(e.error==="not-allowed"?"请允许麦克风权限后重试":"语音识别失败："+e.error);
+      setIsRecording(false);
+    };
+    rec.onend = ()=>setIsRecording(false);
+    recognitionRef.current = rec;
+    rec.start();
   };
 
   const parseWithAI = async ()=>{
@@ -395,12 +430,29 @@ function App(){
             )}
 
             <div style={{marginBottom:12}}>
-              <textarea rows={4} placeholder="输入交易描述..." value={aiInput} onChange={e=>{setAiInput(e.target.value);setAiPreview(null);setAiError("");}} style={{resize:"vertical",lineHeight:1.6,fontSize:15}}/>
+              <textarea rows={4} placeholder="输入或说出交易描述，如：小王10箱干皮50一箱..." value={aiInput} onChange={e=>{setAiInput(e.target.value);setAiPreview(null);setAiError("");}} style={{resize:"vertical",lineHeight:1.6,fontSize:15}}/>
             </div>
 
-            <button className="ai-parse-btn" disabled={aiParsing||!aiInput.trim()} onClick={parseWithAI}>
-              {aiParsing?<span className="pulsing">⚙ AI 解析中...</span>:"⚡ 智能解析"}
-            </button>
+            <div style={{display:"flex",gap:10,marginBottom:0}}>
+              <button className="ai-parse-btn" disabled={aiParsing||!aiInput.trim()} onClick={parseWithAI} style={{flex:1}}>
+                {aiParsing?<span className="pulsing">⚙ AI 解析中...</span>:"⚡ 智能解析"}
+              </button>
+              <button className={`voice-btn${isRecording?" recording":""}`} onClick={startVoice} title={isRecording?"点击停止":"点击开始语音输入"}>
+                {isRecording?"⏹":"🎤"}
+              </button>
+            </div>
+
+            {isRecording&&(
+              <div style={{marginTop:10,padding:"8px 14px",background:"#2a0808",border:"1px solid #e05555",borderRadius:4,color:"#ff9999",fontSize:13,display:"flex",alignItems:"center",gap:8}}>
+                <span className="pulsing">●</span> 正在聆听，说完后自动识别...点 ⏹ 停止
+              </div>
+            )}
+
+            {voiceError&&(
+              <div style={{marginTop:10,padding:"8px 14px",background:"#2a0a0a",border:"1px solid #8b1a1a",borderRadius:4,color:"#ff8888",fontSize:13}}>
+                🎤 {voiceError}
+              </div>
+            )}
 
             {aiError&&<div style={{marginTop:12,padding:"10px 14px",background:"#2a0a0a",border:"1px solid #8b1a1a",borderRadius:4,color:"#ff8888",fontSize:13}}>⚠ {aiError}</div>}
 
