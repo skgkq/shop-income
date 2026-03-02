@@ -8,13 +8,13 @@
 <meta name="apple-mobile-web-app-title" content="每日收账"/>
 <meta name="theme-color" content="#1a1209"/>
 <title>每日收账</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.bootcdn.net/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{background:#1a1209;min-height:100vh;font-family:'Noto Serif SC','SimSun',serif;color:#e8d5a3}
+html,body{background:#1a1209;min-height:100vh;font-family:'PingFang SC','Microsoft YaHei','SimSun',sans-serif;color:#e8d5a3}
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:#1a1209}
 ::-webkit-scrollbar-thumb{background:#5a3e1b;border-radius:2px}
@@ -60,7 +60,7 @@ const { useState, useCallback } = React;
 const CATEGORIES = ["餐饮","零售","服务","外卖","其他"];
 const PAY_METHODS = ["现金","微信","支付宝","银行卡","其他"];
 const STORAGE_KEY = "shop-income-records";
-const API_KEY_STORAGE = "shop-income-apikey";
+const API_KEY_STORAGE = "shop-income-qwen-apikey";
 
 const fmt = (n) => "¥" + Number(n||0).toLocaleString("zh-CN",{minimumFractionDigits:2,maximumFractionDigits:2});
 const todayStr = () => new Date().toISOString().slice(0,10);
@@ -158,14 +158,14 @@ function App(){
     setAiParsing(true); setAiError(""); setAiPreview(null);
     try{
       const prompt = `你是一个店铺收账助手。请从以下这段话中提取账单信息，返回纯JSON，不要任何多余文字或代码块标记。\n今天日期：${todayStr()}\n可用分类：餐饮、零售、服务、外卖、其他\n可用支付方式：现金、微信、支付宝、银行卡、其他\n用户描述：${aiInput}\n请返回如下格式的JSON（所有字段必须存在）：\n{"date":"YYYY-MM-DD","amount":数字,"customerName":"客户姓名或空字符串","category":"分类","payMethod":"支付方式","note":"备注"}`;
-      const resp = await fetch("https://api.anthropic.com/v1/messages",{
+      const resp = await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",{
         method:"POST",
-        headers:{"Content-Type":"application/json","x-api-key":apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-        body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:500,messages:[{role:"user",content:prompt}]})
+        headers:{"Content-Type":"application/json","Authorization":"Bearer "+apiKey},
+        body:JSON.stringify({model:"qwen-plus",max_tokens:500,messages:[{role:"user",content:prompt}]})
       });
       const data = await resp.json();
       if(data.error) throw new Error(data.error.message);
-      const text = (data.content||[]).map(b=>b.text||"").join("");
+      const text = data.choices?.[0]?.message?.content||"";
       const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
       if(!parsed.amount||parsed.amount<=0) throw new Error("无法识别金额");
       setAiPreview(parsed);
@@ -191,7 +191,7 @@ function App(){
   const catBreak = CATEGORIES.map(cat=>({cat,total:todayRecs.filter(r=>r.category===cat).reduce((s,r)=>s+r.amount,0)})).filter(c=>c.total>0);
 
   return (
-    <div style={{fontFamily:"'Noto Serif SC','SimSun',serif",background:"#1a1209",minHeight:"100vh",color:"#e8d5a3"}}>
+    <div style={{fontFamily:"'PingFang SC','Microsoft YaHei','SimSun',sans-serif",background:"#1a1209",minHeight:"100vh",color:"#e8d5a3"}}>
 
       {/* Header */}
       <div style={{background:"linear-gradient(180deg,#2e1a06 0%,#1a1209 100%)",borderBottom:"1px solid #3d2910",padding:"20px 20px 14px"}}>
@@ -215,11 +215,11 @@ function App(){
           <div style={{background:"#1f1005",border:"1px solid #5a3e1b",borderRadius:4,padding:16,marginBottom:16}}>
             <p style={{fontSize:13,color:"#d4a853",marginBottom:8,letterSpacing:1}}>⚙ AI 功能设置</p>
             <p style={{fontSize:12,color:"#6b4f28",marginBottom:10,lineHeight:1.7}}>
-              AI 录入需要 Anthropic API Key。<br/>
-              获取地址：<span style={{color:"#a07840"}}>console.anthropic.com</span>
+              AI 录入需要通义千问 API Key。<br/>
+              获取地址：<span style={{color:"#a07840"}}>dashscope.console.aliyun.com</span>
             </p>
             <label className="field-label">API Key</label>
-            <input type="password" placeholder="sk-ant-..." value={apiKeyDraft} onChange={e=>setApiKeyDraft(e.target.value)} style={{marginBottom:10,fontSize:13}}/>
+            <input type="password" placeholder="sk-..." value={apiKeyDraft} onChange={e=>setApiKeyDraft(e.target.value)} style={{marginBottom:10,fontSize:13}}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               <button className="cancel-btn" onClick={()=>setShowSettings(false)} style={{padding:"9px"}}>取消</button>
               <button className="submit-btn" onClick={()=>{saveApiKey(apiKeyDraft);setApiKey(apiKeyDraft);setShowSettings(false);}} style={{padding:"9px",fontSize:14,letterSpacing:1}}>保存</button>
